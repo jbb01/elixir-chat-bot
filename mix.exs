@@ -26,6 +26,11 @@ defmodule ChatBot.MixProject do
       {:httpoison, "~> 2.0"},
       {:websockex, "~> 0.4.3"},
       {:json, "~> 1.4"},
+
+      # Database
+      {:ecto, "~> 3.0"},
+      {:ecto_sql, "~> 3.0"},
+      {:postgrex, "~> 0.16"},
     ]
   end
 end
