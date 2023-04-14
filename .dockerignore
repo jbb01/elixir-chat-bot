@@ -1,6 +1,13 @@
-./.idea
+# Build output
 ./deps
 ./_build
 
-login.txt
+# IntelliJ
+./.idea
+*.iml
+
 Dockerfile
+
+# Config
+login.txt
+config.json

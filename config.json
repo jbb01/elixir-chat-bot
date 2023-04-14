@@ -1,0 +1,13 @@
+{
+  "channels": ["test", "elixir", "marek"],
+  "bots": [
+    {
+      "module": "EchoBot",
+      "channels": ["test"]
+    },
+    {
+      "module": "PingBot",
+      "channels": ["test", "elixir"]
+    }
+  ]
+}
