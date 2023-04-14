@@ -1,0 +1,6 @@
+./.idea
+./deps
+./_build
+
+login.txt
+Dockerfile
