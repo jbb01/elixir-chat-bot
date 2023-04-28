@@ -1,4 +1,5 @@
 defmodule PizzaBot.Pizza do
+  @enforce_keys [:id, :number, :name, :ingredients, :price]
   defstruct [:id, :number, :name, :ingredients, :price]
 
   @type t() :: %__MODULE__{
@@ -9,7 +10,9 @@ defmodule PizzaBot.Pizza do
     price: float
   }
 
-  def parse(%{"id" => id, "name" => name, "number" => number, "ingredients" => ingredients, "price" => price}) do
+  @spec parse(map) :: PizzaBot.Pizza.t()
+  def parse(%{"id" => id, "name" => name, "number" => number, "ingredients" => ingredients, "price" => price})
+    when is_integer(id) and is_binary(name) and is_binary(number) and is_binary(ingredients) and is_float(price) do
     %__MODULE__{
       id: id,
       name: name,

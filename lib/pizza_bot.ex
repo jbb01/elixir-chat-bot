@@ -12,7 +12,10 @@ defmodule PizzaBot do
 
   @impl true
   def handle_command([@command, "info"], _message, state) do
-    pizzas = PizzaBot.State.get_pizzas()
+    order = PizzaBot.State.get_current_order()
+    restaurant = PizzaBot.State.get_restaurant(order.restaurant)
+
+    pizzas = restaurant.pizzas
     |> Enum.map(fn pizza ->
       id = tabular_numbers(pizza.id)
       number = tabular_numbers(pizza.number)
@@ -21,9 +24,10 @@ defmodule PizzaBot do
       "#{id} | #{number} | #{price} € | #{String.upcase(pizza.name)} #{pizza.ingredients}"
     end)
 
-    meta = PizzaBot.State.get_meta()
+    name = "Pizzabestellung bei " <> restaurant.name <> " in " <> restaurant.city
+    deadline = "Bestellannahmeschluss: " <> order.deadline
 
-    ["Bestellannahmeschluss: " <> meta.deadline | pizzas]
+    [name, deadline | pizzas]
     |> Enum.join("\n")
     |> post
 
@@ -40,19 +44,21 @@ defmodule PizzaBot do
 
   @impl true
   def handle_command([@command, "summary"], %Message{user_id: user_id}, state) when is_integer(user_id) do
-    meta = PizzaBot.State.get_meta()
-    if user_id == meta.user_id do
-      orders = PizzaBot.State.get_orders()
+    order = PizzaBot.State.get_current_order()
+    restaurant = PizzaBot.State.get_restaurant(order.restaurant)
+
+    if user_id == order.user_id do
+      items = PizzaBot.State.get_order_items(order.id)
       |> Enum.group_by(
            fn order -> {order.pizza_id, order.notes} end,
            fn order -> order.user_name end
          )
       |> Enum.map(fn {{pizza_id, notes}, users} ->
-        pizza = PizzaBot.State.get_pizza(pizza_id)
+        pizza = PizzaBot.Restaurant.get_pizza(restaurant, pizza_id)
         tabular_numbers(length(users)) <> "x " <> pizza.name <> " " <> notes <> " (" <> Enum.join(users, ", ") <> ")"
       end)
 
-      ["Übersicht" | orders]
+      ["Übersicht" | items]
       |> Enum.join("\n")
       |> post
     end
@@ -62,14 +68,15 @@ defmodule PizzaBot do
 
   @impl true
   def handle_command([@command, "check"], %Message{user_id: user_id}, state) when is_integer(user_id) do
-    meta = PizzaBot.State.get_meta()
+    order = PizzaBot.State.get_current_order()
+    restaurant = PizzaBot.State.get_restaurant(order.restaurant)
 
-    if user_id == meta.user_id do
-      payments = PizzaBot.State.get_orders()
+    if user_id == order.user_id do
+      payments = PizzaBot.State.get_order_items(order.id)
       |> Enum.group_by(
           fn order -> {order.user_id, order.user_name} end,
           fn order ->
-            pizza = PizzaBot.State.get_pizza(order.pizza_id)
+            pizza = PizzaBot.Restaurant.get_pizza(restaurant , order.pizza_id)
             pizza.price
           end
         )
@@ -96,13 +103,16 @@ defmodule PizzaBot do
 
   @impl true
   def handle_command([@command, "order", "list"], %Message{user_id: user_id, user_name: user_name}, state) when is_integer(user_id) do
-    orders = PizzaBot.State.get_orders_by_user(user_id)
-    |> Enum.map(fn order ->
-      pizza = PizzaBot.State.get_pizza(order.pizza_id)
-      "#{order.id} | #{pizza.name} | #{order.notes}"
+    order = PizzaBot.State.get_current_order()
+    restaurant = PizzaBot.State.get_restaurant(order.restaurant)
+
+    items = PizzaBot.State.get_order_items_by_user(order.id, user_id)
+    |> Enum.map(fn item ->
+      pizza = PizzaBot.Restaurant.get_pizza(restaurant, item.pizza_id)
+      "#{item.id} | #{pizza.name} | #{item.notes}"
     end)
 
-    (["Bestellungen von " <> user_name, "" | orders])
+    (["Bestellungen von " <> user_name, "" | items])
     |> Enum.join("\n")
     |> post
 
@@ -110,18 +120,22 @@ defmodule PizzaBot do
   end
 
   @impl true
-  def handle_command([@command, "order", "revoke", order_id], %Message{user_id: user_id}, state) when is_integer(user_id) do
-    order_id = String.to_integer(order_id)
-    order = PizzaBot.State.get_order(order_id)
+  def handle_command([@command, "order", "revoke", item_id], %Message{user_id: user_id}, state) when is_integer(user_id) do
+    item_id = String.to_integer(item_id)
+
+    order = PizzaBot.State.get_current_order()
+    item = PizzaBot.State.get_order_item(order.id, item_id)
+
     cond do
-      is_nil(order) ->
-        post("Die Bestellung mit ID #{order_id} existiert nicht.")
-      order.user_id != user_id ->
-        post("Die Bestellung mit ID #{order_id} ist nicht deine.")
+      is_nil(item) ->
+        post("Die Bestellung mit ID #{item_id} existiert nicht.")
+      item.user_id != user_id ->
+        post("Die Bestellung mit ID #{item_id} ist nicht deine.")
       true ->
-        pizza = PizzaBot.State.get_pizza(order.pizza_id)
-        PizzaBot.State.delete_order(order_id)
-        post("Die Bestellung mit ID #{order_id} (#{pizza.name}) wurde zurückgenommen.")
+        pizza = PizzaBot.State.get_restaurant(order.restaurant)
+                |> PizzaBot.Restaurant.get_pizza(item.pizza_id)
+        PizzaBot.State.delete_order_item(order.id, item.id)
+        post("Die Bestellung mit ID #{item_id} (#{pizza.name}) wurde zurückgenommen.")
     end
     state
   end
@@ -129,9 +143,11 @@ defmodule PizzaBot do
   @impl true
   def handle_command([@command, "order", pizza_id | notes], %Message{user_id: user_id, user_name: user_name}, state)
       when is_integer(user_id) do
-
     pizza_id = String.to_integer(pizza_id)
-    pizza = PizzaBot.State.get_pizza(pizza_id)
+
+    order = PizzaBot.State.get_current_order()
+    pizza = PizzaBot.State.get_restaurant(order.restaurant)
+            |> PizzaBot.Restaurant.get_pizza(pizza_id)
 
     if is_nil(pizza) do
       post("Es gibt keine Pizza mit der ID " <> to_string(pizza_id))
@@ -139,10 +155,10 @@ defmodule PizzaBot do
       note = Enum.join(notes, " ")
       |> String.replace(["\n", "\r"], " ")
 
-      order = %PizzaBot.Order{user_id: user_id, user_name: user_name, pizza_id: pizza_id, notes: note}
-      |> PizzaBot.State.add_order
+      item = %PizzaBot.OrderItem{user_id: user_id, user_name: user_name, pizza_id: pizza_id, notes: note}
+      item_with_id = PizzaBot.State.add_order_item(order.id, item)
 
-      post("Pizza \"#{pizza.name}\" wurde zur Bestellung hinzugefügt (Order-ID #{order.id}).")
+      post("Pizza \"#{pizza.name}\" wurde zur Bestellung hinzugefügt (Order-ID #{item_with_id.id}).")
     end
 
     state

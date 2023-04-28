@@ -1,79 +1,122 @@
 defmodule PizzaBot.State do
   @meta_file "data/meta.json"
-  @pizza_file "data/pizzas.json"
-  @order_file "data/orders.json"
+  @pizza_file "data/pizza"
+  @order_file "data/order"
 
-  @spec get_meta() :: PizzaBot.Meta.t()
-  def get_meta() do
-    File.read!(@meta_file)
+  @spec get_current_order_id() :: integer
+  def get_current_order_id() do
+    meta = File.read!(@meta_file)
     |> JSON.decode!()
     |> PizzaBot.Meta.parse()
+
+    meta.current_order
+  end
+
+  @spec get_current_order() :: PizzaBot.OrderMeta.t()
+  def get_current_order() do
+    get_current_order_id()
+    |> get_order_meta()
+  end
+
+  @spec get_current_restaurant() :: PizzaBot.Restaurant.t()
+  def get_current_restaurant() do
+    get_current_order().restaurant
+    |> get_restaurant()
   end
 
 
-  @spec get_pizzas() :: [PizzaBot.Pizza.t()]
-  def get_pizzas() do
-    File.read!(@pizza_file)
+  @spec get_restaurant(restaurant :: String.t()) :: PizzaBot.Restaurant.t()
+  def get_restaurant(restaurant) when is_binary(restaurant) do
+    restaurant
+    |> get_restaurant_file()
+    |> File.read!()
     |> JSON.decode!()
-    |> Enum.map(&PizzaBot.Pizza.parse/1)
+    |> PizzaBot.Restaurant.parse()
   end
 
-  @spec get_pizza(integer) :: PizzaBot.Pizza.t() | nil
-  def get_pizza(id) do
-    get_pizzas()
-    |> Enum.filter(fn pizza -> pizza.id == id end)
-    |> List.first
-  end
-
-
-
-  @spec get_orders() :: [PizzaBot.Order.t()]
-  def get_orders() do
-    File.read!(@order_file)
+  @spec get_order_meta(order_id :: integer) :: PizzaBot.OrderMeta.t()
+  def get_order_meta(order_id) when is_integer(order_id) do
+    order_id
+    |> get_order_meta_file()
+    |> File.read!()
     |> JSON.decode!()
-    |> Enum.map(&PizzaBot.Order.parse/1)
+    |> PizzaBot.OrderMeta.parse()
   end
 
-  @spec get_orders_by_user(integer) :: [PizzaBot.Order.t()]
-  def get_orders_by_user(user_id) do
-    get_orders()
-    |> Enum.filter(fn order -> order.user_id == user_id end)
+  @spec get_order_items(order_id :: integer) :: [PizzaBot.OrderItem.t()]
+  def get_order_items(order_id) when is_integer(order_id) do
+    order_id
+    |> get_order_items_file()
+    |> File.read!()
+    |> JSON.decode!()
+    |> Enum.map(&PizzaBot.OrderItem.parse/1)
   end
 
-  @spec get_order(integer) :: PizzaBot.Order.t() | nil
-  def get_order(id) do
-    get_orders()
-    |> Enum.filter(fn order -> order.id == id end)
-    |> List.first
+  @spec get_order_items_by_user(order_id :: integer, user_id :: integer) :: PizzaBot.OrderItem.t() | nil
+  def get_order_item(order_id, item_id) when is_integer(order_id) and is_integer(item_id) do
+    order_id
+    |> get_order_items()
+    |> Enum.filter(fn item -> item.id == item_id end)
+    |> List.first()
   end
 
-  @spec add_order(PizzaBot.Order.t()) :: PizzaBot.Order.t()
-  def add_order(order) do
-    orders = get_orders()
-    highest_id = orders
+  @spec get_order_items_by_user(order_id :: integer, user_id :: integer) :: [PizzaBot.OrderItem.t()]
+  def get_order_items_by_user(order_id, user_id) when is_integer(order_id) and is_integer(user_id) do
+    order_id
+    |> get_order_items()
+    |> Enum.filter(fn item -> item.user_id == user_id end)
+  end
+
+  @spec add_order_item(order_id :: integer, item :: PizzaBot.OrderItem.t()) :: PizzaBot.OrderItem.t()
+  def add_order_item(order_id, %PizzaBot.OrderItem{} = item) when is_integer(order_id) do
+    items = get_order_items(order_id)
+
+    highest_id = items
                  |> Enum.map(&(&1.id))
                  |> Enum.max(fn -> 0 end)
 
-    order_with_id = Map.put(order, :id, highest_id + 1)
-    File.write!(@order_file, JSON.encode!([order_with_id | orders]))
-    order_with_id
-  end
+    item_with_id = Map.put(item, :id, highest_id + 1)
 
-  @spec delete_order(integer) :: any
-  def delete_order(order_id) do
-    json = get_orders()
-    |> Enum.filter(fn order -> order.id != order_id end)
+    save = &(File.write!(get_order_items_file(order_id), &1))
+
+    [item_with_id | items]
     |> JSON.encode!()
+    |> save.()
 
-    File.write!(@order_file, json)
+    item_with_id
   end
 
-  @spec delete_order_by_user(integer) :: any
-  def delete_order_by_user(user_id) do
-    json = get_orders()
+  @spec delete_order_item(order_id :: integer, item :: PizzaBot.OrderItem.t()) :: any
+  def delete_order_item(order_id, item_id) when is_integer(order_id) do
+    save = &(File.write!(get_order_items_file(order_id), &1))
+
+    get_order_items(order_id)
+    |> Enum.filter(fn order -> order.id != item_id end)
+    |> JSON.encode!()
+    |> save.()
+  end
+
+  @spec delete_order_by_user(order_id :: integer, user_id :: integer) :: any
+  def delete_order_by_user(order_id, user_id) when is_integer(order_id) and is_integer(user_id) do
+    save = &(File.write!(get_order_items_file(order_id), &1))
+
+    get_order_items(order_id)
     |> Enum.filter(fn order -> order.user_id != user_id end)
     |> JSON.encode!()
+    |> save.()
+  end
 
-    File.write!(@order_file, json)
+
+
+  defp get_restaurant_file(restaurant) do
+    @pizza_file <> "/" <> restaurant <> ".json"
+  end
+
+  defp get_order_meta_file(order_id) do
+    @order_file <> "/" <> to_string(order_id) <> "_meta.json"
+  end
+
+  defp get_order_items_file(order_id) do
+    @order_file <> "/" <> to_string(order_id) <> "_items.json"
   end
 end

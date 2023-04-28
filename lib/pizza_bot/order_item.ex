@@ -1,4 +1,4 @@
-defmodule PizzaBot.Order do
+defmodule PizzaBot.OrderItem do
   @enforce_keys [:user_id, :user_name, :pizza_id, :notes]
   defstruct [:id, :user_id, :user_name, :pizza_id, :notes]
 
@@ -10,7 +10,9 @@ defmodule PizzaBot.Order do
     notes: String.t()
   }
 
-  def parse(%{"id" => id, "user_id" => user_id, "user_name" => user_name, "pizza_id" => pizza_id, "notes" => notes}) do
+  @spec parse(map) :: PizzaBot.OrderItem.t()
+  def parse(%{"id" => id, "user_id" => user_id, "user_name" => user_name, "pizza_id" => pizza_id, "notes" => notes})
+    when is_integer(id) and is_integer(user_id) and is_binary(user_name) and is_integer(pizza_id) and is_binary(notes) do
     %__MODULE__{
       id: id,
       user_id: user_id,

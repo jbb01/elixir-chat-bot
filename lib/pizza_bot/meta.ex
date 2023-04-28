@@ -1,18 +1,15 @@
 defmodule PizzaBot.Meta do
-  @enforce_keys [:running, :user_id, :deadline]
-  defstruct [:running, :user_id, :deadline]
+  @enforce_keys [:current_order]
+  defstruct [:current_order]
 
   @type t() :: %__MODULE__{
-    running: bool,
-    user_id: integer,
-    deadline: String.t()
+    current_order: integer
   }
 
-  def parse(%{"running" => running, "user_id" => user_id, "deadline" => deadline}) do
+  @spec parse(map) :: PizzaBot.Meta.t()
+  def parse(%{"current_order" => current_order}) do
     %__MODULE__{
-      running: running,
-      user_id: user_id,
-      deadline: deadline
+      current_order: current_order
     }
   end
 end

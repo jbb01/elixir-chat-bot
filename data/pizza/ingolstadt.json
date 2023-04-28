@@ -1,0 +1,33 @@
+{
+  "name": "Grande Pizza & Döner",
+  "city": "Ingolstadt",
+  "phone": "0841 12852705",
+  "pizzas": [
+    {"id": 1, "number": "1", "name": "Margherita", "ingredients": "mit Mozzarella", "price":  9.90},
+    {"id": 2, "number": "2", "name": "Funghi Freschi", "ingredients": "mit Edemar und Egerlinge", "price":  12.50},
+    {"id": 3, "number": "3", "name": "Vegetariana", "ingredients": "mit Mozzarella Vegetarianagemüse und Knoblauch", "price":  13.50},
+    {"id": 4, "number": "4", "name": "Patate Salsiccia", "ingredients": "mit Kartoffel, Edamer und Peperoni-Salami", "price":  13.90},
+    {"id": 5, "number": "5", "name": "Parmigiano", "ingredients": "mit Mozzarella und Aubergine Grana Padano", "price":  13.90},
+    {"id": 6, "number": "6", "name": "Salame", "ingredients": "mit Edamer und Salami", "price":  12.50},
+    {"id": 7, "number": "7", "name": "Salsicci (scharf)", "ingredients": "mit Mozzarella, Peperoni-Salami und scharfes Öl", "price":  13.90},
+    {"id": 8, "number": "8", "name": "Prosciutto Crudo", "ingredients": "mit Mozzarella und Prosciutto Crudo", "price":  14.50},
+    {"id": 9, "number": "9", "name": "Tonno", "ingredients": "mit Mozzarella und Zwiebeln", "price":  14.50},
+    {"id": 10, "number": "10", "name": "Boscaiola", "ingredients": "mit Edamer, Egerlinge und Peperoni-Salami", "price":  13.90},
+    {"id": 11, "number": "11", "name": "Caprese", "ingredients": "mit Mozzarella, Kirschtomaten und Mozzarellakugeln", "price":  13.90},
+    {"id": 12, "number": "12", "name": "Erbaccia", "ingredients": "mit Edamer, Spinat, Broccoli und Gorgonzola", "price":  13.50},
+    {"id": 13, "number": "13", "name": "Rucola", "ingredients": "mit Mozzarella, Rucola, Grana Padano und Knoblauch", "price":  14.50},
+    {"id": 14, "number": "14", "name": "Hawaii", "ingredients": "mit Edamer, Vorderschinken und Ananas", "price":  13.90},
+    {"id": 15, "number": "15", "name": "Quattro Formaggi", "ingredients": "mit Edamer, Mozzarella, Gorgonzola und Grana Padano", "price":  14.50},
+    {"id": 16, "number": "16", "name": "Gamberetti", "ingredients": "mit Edamer, Shrimps, Kirschtomaten und Knoblauch", "price":  14.50},
+    {"id": 17, "number": "17", "name": "Marinara", "ingredients": "mit Edamer, Meeresfrüchten und Knoblauch", "price":  14.50},
+    {"id": 18, "number": "18", "name": "Calzone", "ingredients": "mit Egerlinge, Vorderschinken, Salami und Edamer", "price":  13.90},
+    {"id": 19, "number": "19", "name": "Napoli", "ingredients": "mit Mozzarella, Sardellen und Kapern", "price":  13.90},
+    {"id": 20, "number": "20", "name": "Degli Artisti", "ingredients": "mit Edamer, Egerlinge, Vorderschinken, Salami, Peperoni und roten Zwiebeln", "price":  14.50},
+    {"id": 21, "number": "21", "name": "Romana", "ingredients": "mit Edamer und Egerlinge, Vorderschinken, Salami und Sardellen", "price":  13.90},
+    {"id": 22, "number": "22", "name": "Rustica (scharf)", "ingredients": "mit Mozzarella, Tomaten, roten Zwiebeln, schwarzen Oliven und scharfes Öl", "price":  13.90},
+    {"id": 23, "number": "23", "name": "Braccio di Ferro", "ingredients": "mit Edamer, Spinat, Eiern und Knoblauch", "price":  12.90},
+    {"id": 24, "number": "24", "name": "BBQ Chicken (scharf)", "ingredients": "mit Barbecuesauce, Mozzarella, Hähnchenbrust, roten Zwiebeln, Peperoni und scharfes Öl", "price":  14.50},
+    {"id": 25, "number": "25", "name": "Pizza Brot", "ingredients": "mit Rosmarin und Knoblauch", "price":  7.90},
+    {"id": 26, "number": "26", "name": "Döner Pizza", "ingredients": "Mit Pizzasauce Edemer und Döner Fleisch", "price": 13.90}
+  ]
+}
