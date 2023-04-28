@@ -22,7 +22,7 @@ defmodule ChatBot.Bot do
           {:noreply, state}
         else
           whitelist = ChatBot.BotState.get_channel_whitelist(get_name())
-          if is_list(whitelist) and message.channel not in whitelist do
+          if is_list(whitelist) and String.downcase(message.channel) not in whitelist do
             {:noreply, state}
           else
             ChatBot.BotState.set_channel(get_name(), message.channel)
