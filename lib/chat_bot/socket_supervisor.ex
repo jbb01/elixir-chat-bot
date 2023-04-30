@@ -46,7 +46,7 @@ defmodule ChatBot.SocketSupervisor do
   @spec socket_spec(channel :: String.t()) :: any
   defp socket_spec(channel) when is_binary(channel) do
     {ChatBot.Socket, channel: channel}
-    |> Supervisor.child_spec(id: socket_id(channel), restart: :transient)
+    |> Supervisor.child_spec(id: socket_id(channel), restart: :temporary)
   end
 
   @spec socket_id(channel :: String.t()) :: {atom, String.t()}
