@@ -19,7 +19,7 @@ defmodule PizzaBot do
     |> Enum.map(fn pizza ->
       id = tabular_numbers(pizza.id)
       number = tabular_numbers(pizza.number)
-      price = tabular_numbers(:erlang.float_to_binary(pizza.price, [decimals: 2]), 5)
+      price = tabular_numbers(pizza.price)
       
       "#{id} | #{number} | #{price} € | #{String.upcase(pizza.name)} #{pizza.ingredients}"
     end)
@@ -34,13 +34,9 @@ defmodule PizzaBot do
     state
   end
 
-#  @impl true
-#  def handle_command([@command, "start", deadline], %Message{user_id: user_id}, state) when is_integer(user_id) do
-#    post("""
-#    Ich nehme bis #{deadline} Pizzabestellungen entgegen.
-#    Bestellungen können mit \"!marek order\" aufgegeben werden.
-#    """)
-#  end
+  #
+  # Admin Commands
+  #
 
   @impl true
   def handle_command([@command, "summary"], %Message{user_id: user_id}, state) when is_integer(user_id) do
@@ -69,30 +65,27 @@ defmodule PizzaBot do
   @impl true
   def handle_command([@command, "check"], %Message{user_id: user_id}, state) when is_integer(user_id) do
     order = PizzaBot.State.get_current_order()
-    restaurant = PizzaBot.State.get_restaurant(order.restaurant)
 
     if user_id == order.user_id do
-      payments = PizzaBot.State.get_order_items(order.id)
-      |> Enum.group_by(
-          fn order -> {order.user_id, order.user_name} end,
-          fn order ->
-            pizza = PizzaBot.Restaurant.get_pizza(restaurant , order.pizza_id)
-            pizza.price
-          end
-        )
-      |> Enum.map(fn {user, prices} -> {user, Enum.sum(prices)} end)
+      # [{{user_id, user_name}, total, payed}, ...]
+      payments = get_payments(order)
 
       total = payments
-      |> Enum.map(fn {_, price} -> price end)
+      |> Enum.map(fn {_user, total, _payment} -> total end)
       |> Enum.sum()
 
       table = payments
-      |> Enum.map(fn {{_, user_name}, price} ->
-        user_name <> ": " <> tabular_numbers(price) <> " €"
+      |> Enum.map(fn
+        {{_user_id, user_name}, total, payment} when (payment == 0) ->
+          "#{user_name}: #{tabular_numbers(total)} €"
+        {{_user_id, user_name}, total, payment} when (payment >= total) ->
+          strikethrough("#{user_name}: #{tabular_numbers(total)} €")
+        {{_user_id, user_name}, total, payment} ->
+          "#{user_name}: #{strikethrough(tabular_numbers(total) <> " €")} #{tabular_numbers(total - payment)} €"
       end)
 
       ["Rechnung (ohne Trinkgeld)", "alle Angaben ohne Gewähr", "" | table]
-      ++ ["", "Gesamt: " <> tabular_numbers(total) <> " €"]
+      ++ ["", "Gesamt: #{tabular_numbers(total)} €"]
       |> Enum.join("\n")
       |> post
     end
@@ -100,6 +93,89 @@ defmodule PizzaBot do
     state
   end
 
+  @impl true
+  def handle_command([@command, "order", "confirm", item_id], %Message{user_id: user_id}, state) when is_integer(user_id) do
+    confirm_payment(item_id, user_id, true, fn pizza, item ->
+      post("Zahlungseingang für \"#{pizza.name}\" (#{item.user_name}) wurde bestätigt.")
+    end)
+
+    state
+  end
+
+  @impl true
+  def handle_command([@command, "order", "unconfirm", item_id], %Message{user_id: user_id}, state) when is_integer(user_id) do
+    confirm_payment(item_id, user_id, false, fn pizza, item ->
+      post("Bestätigung des Zahlungseingang für \"#{pizza.name}\" (#{item.user_name}) wurde zurückgenommen.")
+    end)
+
+    state
+  end
+
+  @impl true
+  def handle_command([@command, "order", "list", "all"], %Message{user_id: user_id}, state) when is_integer(user_id) do
+    order = PizzaBot.State.get_current_order()
+
+    if user_id == order.user_id do
+      restaurant = PizzaBot.State.get_restaurant(order.restaurant)
+      PizzaBot.State.get_order_items(order.id)
+      |> Enum.map(fn item ->
+        pizza = PizzaBot.Restaurant.get_pizza(restaurant, item.pizza_id)
+        "#{item.id} | #{item.user_name} | #{pizza.name} | #{item.notes}"
+      end)
+      |> Enum.join("\n")
+      |> post
+    end
+
+    state
+  end
+
+  @spec get_payments(order :: PizzaBot.OrderMeta.t())
+        :: [{{user_id :: integer, user_name :: String.t()}, total :: number, payed :: number}]
+  defp get_payments(order) do
+    restaurant = PizzaBot.State.get_restaurant(order.restaurant)
+
+    PizzaBot.State.get_order_items(order.id)
+    |> Enum.group_by(
+         &PizzaBot.OrderItem.get_user/1,
+         fn order ->
+           pizza = PizzaBot.Restaurant.get_pizza(restaurant , order.pizza_id)
+           {pizza.price, order.payed?}
+         end
+       )
+    |> Enum.map(fn {user, prices} ->
+      {
+        user,
+        prices |> Enum.map(fn {price, _payed?} -> price end) |> Enum.sum(),
+        prices |> Enum.filter(fn {_price, payed?} -> payed? end) |> Enum.map(fn {price, _payed?} -> price end) |> Enum.sum()
+      }
+    end)
+  end
+
+  @spec confirm_payment(
+          item_id :: binary, user_id :: integer, payed? :: boolean,
+          success :: ((pizza :: PizzaBot.Pizza.t(), item :: PizzaBot.OrderItem.t()) -> term)
+        ) :: any
+  defp confirm_payment(item_id, user_id, payed?, success) do
+    item_id = String.to_integer(item_id)
+
+    order = PizzaBot.State.get_current_order()
+    if user_id == order.user_id do
+      case PizzaBot.State.get_order_item(order.id, item_id) do
+        nil ->
+          post("Die Bestellung mit ID #{item_id} existiert nicht.")
+        item ->
+          pizza = PizzaBot.State.get_restaurant(order.restaurant)
+                  |> PizzaBot.Restaurant.get_pizza(item.pizza_id)
+
+          PizzaBot.State.save_order_item(order.id, %{item | payed?: payed?})
+          success.(pizza, item)
+      end
+    end
+  end
+
+  #
+  # Order Commands
+  #
 
   @impl true
   def handle_command([@command, "order", "list"], %Message{user_id: user_id, user_name: user_name}, state) when is_integer(user_id) do
@@ -112,7 +188,7 @@ defmodule PizzaBot do
       "#{item.id} | #{pizza.name} | #{item.notes}"
     end)
 
-    (["Bestellungen von " <> user_name, "" | items])
+    (["Bestellungen von #{user_name}", "" | items])
     |> Enum.join("\n")
     |> post
 
@@ -155,7 +231,7 @@ defmodule PizzaBot do
       note = Enum.join(notes, " ")
       |> String.replace(["\n", "\r"], " ")
 
-      item = %PizzaBot.OrderItem{user_id: user_id, user_name: user_name, pizza_id: pizza_id, notes: note}
+      item = %PizzaBot.OrderItem{user_id: user_id, user_name: user_name, pizza_id: pizza_id, notes: note, payed?: false}
       item_with_id = PizzaBot.State.add_order_item(order.id, item)
 
       post("Pizza \"#{pizza.name}\" wurde zur Bestellung hinzugefügt (Order-ID #{item_with_id.id}).")
@@ -176,7 +252,15 @@ defmodule PizzaBot do
     state
   end
 
+  #
+  # Other Commands
+  #
 
+  @impl true
+  def handle_command([@command, "help", "all"], _message, state) do
+    help(true) |> post()
+    state
+  end
 
   @impl true
   def handle_command([@command | _], _message, state) do
@@ -193,13 +277,19 @@ defmodule PizzaBot do
     state
   end
 
-  defp help() do
+  defp help(admin \\ false) do
+    if admin do
+      Enum.join([help_general(), help_order(), help_admin()], "\n")
+    else
+      Enum.join([help_general(), help_order()], "\n")
+    end
+  end
+
+  defp help_general() do
     """
     Marek is back!
     #{@command} info - Menü anzeigen
-
     """
-    <> help_order()
   end
 
   defp help_order() do
@@ -212,24 +302,60 @@ defmodule PizzaBot do
     """
   end
 
-  defp tabular_numbers(i, width \\ 2)
-  defp tabular_numbers(str, width) when is_binary(str) do
-    str
-    |> String.replace("0", "𝟶")
-    |> String.replace("1", "𝟷")
-    |> String.replace("2", "𝟸")
-    |> String.replace("3", "𝟹")
-    |> String.replace("4", "𝟺")
-    |> String.replace("5", "𝟻")
-    |> String.replace("6", "𝟼")
-    |> String.replace("7", "𝟽")
-    |> String.replace("8", "𝟾")
-    |> String.replace("9", "𝟿")
-    |> String.replace(" ", "\u2007")
-    |> String.pad_leading(width, "\u2007")
+  defp help_admin() do
+    """
+    Admin
+
+    #{@command} summary - Zeigt eine Übersicht der Bestellungen an
+    #{@command} check       - Zeigt die Rechnung an
+
+    #{@command} order confirm <order_id>     - Bestätigt den Zahlungseingang für eine Bestellung
+    #{@command} order unconfirm <order_id> - Widerruft die Bestätigung eines Zahlungseingangs
+    #{@command} order list all                           - Listet alle Bestellungen auf
+    """
   end
 
-  defp tabular_numbers(num, width) do
+  #
+  # Utilities
+  #
+
+  defp tabular_numbers(obj) when is_binary(obj) when is_integer(obj) do
+    tabular_numbers(obj, 2)
+  end
+  defp tabular_numbers(obj) when is_float(obj) do
+    tabular_numbers(obj, 5)
+  end
+  defp tabular_numbers(str, width) when is_binary(str) and is_integer(width) do
+    String.replace(str, ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", " "], fn
+      "0" -> "𝟶"
+      "1" -> "𝟷"
+      "2" -> "𝟸"
+      "3" -> "𝟹"
+      "4" -> "𝟺"
+      "5" -> "𝟻"
+      "6" -> "𝟼"
+      "7" -> "𝟽"
+      "8" -> "𝟾"
+      "9" -> "𝟿"
+      " " -> "\u2007"
+    end)
+    |> String.pad_leading(width, "\u2007")
+  end
+  defp tabular_numbers(num, width) when is_integer(num) and is_integer(width) do
     tabular_numbers(to_string(num), width)
+  end
+  defp tabular_numbers(num, width, precision \\ 2) when is_float(num) and is_integer(width) do
+    tabular_numbers(:erlang.float_to_binary(num, [decimals: precision]), width)
+  end
+
+  defp strikethrough(string) when is_binary(string) do
+    case String.next_grapheme(string) do
+      {<<digit::utf8>> = grapheme, rest} when ?𝟶 <= digit and digit <= ?𝟿 ->
+        grapheme <> "\ufeff\u0336" <> strikethrough(rest)
+      {grapheme, rest} ->
+        grapheme <> "\u0336" <> strikethrough(rest)
+      nil ->
+        ""
+    end
   end
 end
