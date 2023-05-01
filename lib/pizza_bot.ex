@@ -29,7 +29,7 @@ defmodule PizzaBot do
 
     [name, deadline | pizzas]
     |> Enum.join("\n")
-    |> post
+    |> do_post()
 
     state
   end
@@ -56,7 +56,7 @@ defmodule PizzaBot do
 
       ["Übersicht" | items]
       |> Enum.join("\n")
-      |> post
+      |> do_post()
     end
 
     state
@@ -87,7 +87,7 @@ defmodule PizzaBot do
       ["Rechnung (ohne Trinkgeld)", "alle Angaben ohne Gewähr", "" | table]
       ++ ["", "Gesamt: #{tabular_numbers(total)} €"]
       |> Enum.join("\n")
-      |> post
+      |> do_post()
     end
 
     state
@@ -96,7 +96,7 @@ defmodule PizzaBot do
   @impl true
   def handle_command([@command, "order", "confirm", item_id], %Message{user_id: user_id}, state) when is_integer(user_id) do
     confirm_payment(item_id, user_id, true, fn pizza, item ->
-      post("Zahlungseingang für \"#{pizza.name}\" (#{item.user_name}) wurde bestätigt.")
+      do_post("Zahlungseingang für \"#{pizza.name}\" (#{item.user_name}) wurde bestätigt.")
     end)
 
     state
@@ -105,7 +105,7 @@ defmodule PizzaBot do
   @impl true
   def handle_command([@command, "order", "unconfirm", item_id], %Message{user_id: user_id}, state) when is_integer(user_id) do
     confirm_payment(item_id, user_id, false, fn pizza, item ->
-      post("Bestätigung des Zahlungseingang für \"#{pizza.name}\" (#{item.user_name}) wurde zurückgenommen.")
+      do_post("Bestätigung des Zahlungseingang für \"#{pizza.name}\" (#{item.user_name}) wurde zurückgenommen.")
     end)
 
     state
@@ -123,7 +123,7 @@ defmodule PizzaBot do
         "#{item.id} | #{item.user_name} | #{pizza.name} | #{item.notes}"
       end)
       |> Enum.join("\n")
-      |> post
+      |> do_post()
     end
 
     state
@@ -162,7 +162,7 @@ defmodule PizzaBot do
     if user_id == order.user_id do
       case PizzaBot.State.get_order_item(order.id, item_id) do
         nil ->
-          post("Die Bestellung mit ID #{item_id} existiert nicht.")
+          do_post("Die Bestellung mit ID #{item_id} existiert nicht.")
         item ->
           pizza = PizzaBot.State.get_restaurant(order.restaurant)
                   |> PizzaBot.Restaurant.get_pizza(item.pizza_id)
@@ -190,7 +190,7 @@ defmodule PizzaBot do
 
     (["Bestellungen von #{user_name}", "" | items])
     |> Enum.join("\n")
-    |> post
+    |> do_post()
 
     state
   end
@@ -204,14 +204,14 @@ defmodule PizzaBot do
 
     cond do
       is_nil(item) ->
-        post("Die Bestellung mit ID #{item_id} existiert nicht.")
+        do_post("Die Bestellung mit ID #{item_id} existiert nicht.")
       item.user_id != user_id ->
-        post("Die Bestellung mit ID #{item_id} ist nicht deine.")
+        do_post("Die Bestellung mit ID #{item_id} ist nicht deine.")
       true ->
         pizza = PizzaBot.State.get_restaurant(order.restaurant)
                 |> PizzaBot.Restaurant.get_pizza(item.pizza_id)
         PizzaBot.State.delete_order_item(order.id, item.id)
-        post("Die Bestellung mit ID #{item_id} (#{pizza.name}) wurde zurückgenommen.")
+        do_post("Die Bestellung mit ID #{item_id} (#{pizza.name}) wurde zurückgenommen.")
     end
     state
   end
@@ -226,7 +226,7 @@ defmodule PizzaBot do
             |> PizzaBot.Restaurant.get_pizza(pizza_id)
 
     if is_nil(pizza) do
-      post("Es gibt keine Pizza mit der ID " <> to_string(pizza_id))
+      do_post("Es gibt keine Pizza mit der ID " <> to_string(pizza_id))
     else
       note = Enum.join(notes, " ")
       |> String.replace(["\n", "\r"], " ")
@@ -234,7 +234,7 @@ defmodule PizzaBot do
       item = %PizzaBot.OrderItem{user_id: user_id, user_name: user_name, pizza_id: pizza_id, notes: note, payed?: false}
       item_with_id = PizzaBot.State.add_order_item(order.id, item)
 
-      post("Pizza \"#{pizza.name}\" wurde zur Bestellung hinzugefügt (Order-ID #{item_with_id.id}).")
+      do_post("Pizza \"#{pizza.name}\" wurde zur Bestellung hinzugefügt (Order-ID #{item_with_id.id}).")
     end
 
     state
@@ -242,13 +242,13 @@ defmodule PizzaBot do
 
   @impl true
   def handle_command([@command, "order" | _], %Message{user_id: user_id}, state) when is_integer(user_id) do
-    help_order() |> post
+    help_order() |> do_post()
     state
   end
 
   @impl true
   def handle_command([@command, "order" | _], %Message{user_id: user_id}, state) when is_nil(user_id) do
-    post("Bestellungen können nur mit öffentlicher ID abgegeben oder bearbeitet werden.")
+    do_post("Bestellungen können nur mit öffentlicher ID abgegeben oder bearbeitet werden.")
     state
   end
 
@@ -258,13 +258,13 @@ defmodule PizzaBot do
 
   @impl true
   def handle_command([@command, "help", "all"], _message, state) do
-    help(true) |> post()
+    help(true) |> do_post()
     state
   end
 
   @impl true
   def handle_command([@command | _], _message, state) do
-    help() |> post()
+    help() |> do_post()
     state
   end
 
@@ -272,9 +272,32 @@ defmodule PizzaBot do
   def handle_command(["!MAREK" | _], _message, state) do
     ["Jetzt schrei doch nicht so!", "Fresse!", "Es ist so dunkel, ich kann dich nicht hören!"]
     |> Enum.random()
-    |> post()
+    |> do_post()
 
     state
+  end
+
+  @impl true
+  def handle_command(["!Marek" | args], message, state) do
+    handle_command([@command | args], message, state)
+  end
+
+  @impl true
+  def handle_command([command | args], message, state) do
+    lowercase? = fn <<chr>> -> ?a <= chr and chr <= ?z end
+    uppercase? = fn <<chr>> -> ?A <= chr and chr <= ?Z end
+
+    if String.downcase(command) == @command do
+      up_count = String.codepoints(command) |> Enum.count(uppercase?)
+      low_count = String.codepoints(command) |> Enum.count(lowercase?)
+      fraction = up_count / (up_count + low_count)
+
+      ChatBot.BotState.set_property(self(), :upcase_percentage, fraction)
+      handle_command([@command | args], message, state)
+      ChatBot.BotState.set_property(self(), :upcase_percentage, nil)
+    else
+      state
+    end
   end
 
   defp help(admin \\ false) do
@@ -319,6 +342,15 @@ defmodule PizzaBot do
   # Utilities
   #
 
+  defp do_post(name \\ @bot_name, message, args \\ []) do
+    case ChatBot.BotState.get_property(self(), :upcase_percentage) do
+      upcase_percentage when is_float(upcase_percentage) ->
+        post(name, random_upcase(message, upcase_percentage), args)
+      _ ->
+        post(name, message, args)
+    end
+  end
+
   defp tabular_numbers(obj) when is_binary(obj) when is_integer(obj) do
     tabular_numbers(obj, 2)
   end
@@ -354,6 +386,19 @@ defmodule PizzaBot do
         grapheme <> "\ufeff\u0336" <> strikethrough(rest)
       {grapheme, rest} ->
         grapheme <> "\u0336" <> strikethrough(rest)
+      nil ->
+        ""
+    end
+  end
+
+  defp random_upcase(string, percentage) when is_binary(string) and is_float(percentage) do
+    case String.next_grapheme(string) do
+      {grapheme, rest} ->
+        if :rand.uniform() < percentage do
+          String.upcase(grapheme) <> random_upcase(rest, percentage)
+        else
+          grapheme <> random_upcase(rest, percentage)
+        end
       nil ->
         ""
     end

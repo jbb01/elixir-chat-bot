@@ -1,43 +1,53 @@
 defmodule ChatBot.BotState do
+  require Logger
   use Agent
 
   def start_link(_) do
-    Agent.start_link(fn -> {%{}, %{}} end, name: __MODULE__)
+    Agent.start_link(fn -> %{} end, name: __MODULE__)
   end
 
-  @spec set_channel(name :: term, channel :: String.t()) :: :ok
-  def set_channel(name, channel) when is_binary(channel) or is_nil(channel) do
-    Agent.update(__MODULE__, fn {current_channel, channel_whitelist} ->
-      new_current_channel = if is_nil(channel) do
-        Map.delete(current_channel, name)
-      else
-        Map.put(current_channel, name, channel)
-      end
-
-      {new_current_channel, channel_whitelist}
+  @spec get_property(name :: String.t(), key :: atom) :: term
+  def get_property(name, key) when is_atom(key) do
+    Agent.get(__MODULE__, fn
+      %{^name => %{^key => value}} ->
+        value
+      _ ->
+        nil
     end)
   end
 
-  @spec get_channel(name :: term) :: String.t()
-  def get_channel(name) do
-    Agent.get(__MODULE__, fn {state, _} -> Map.get(state, name) end)
+  @spec set_property(name :: String.t(), key :: atom, value :: term) :: :ok
+  def set_property(name, key, value) when is_atom(key) do
+    Logger.debug("Setting property \"#{inspect(key)}\" to \"#{inspect(value)}\" for \"#{inspect(name)}\"")
+    Agent.update(__MODULE__, fn
+      %{^name => %{} = bot_properties} = properties when is_nil(value) ->
+        %{properties | name => Map.delete(bot_properties, key)}
+      %{^name => %{} = bot_properties} = properties ->
+        %{properties | name => Map.put(bot_properties, key, value)}
+      %{} = properties when is_nil(value) ->
+        properties
+      %{} = properties ->
+        Map.put(properties, name, %{key => value})
+    end)
+  end
+
+  @spec set_channel(name :: pid, channel :: String.t()) :: :ok
+  def set_channel(name, channel) when is_pid(name) and (is_binary(channel) or is_nil(channel)) do
+    set_property(name, :channel, channel)
+  end
+
+  @spec get_channel(name :: pid) :: String.t()
+  def get_channel(name) when is_pid(name) do
+    get_property(name, :channel)
   end
 
   @spec set_channel_whitelist(name :: term, channels :: [String.t()]) :: :ok
   def set_channel_whitelist(name, channels) when is_list(channels) or is_nil(channels) do
-    Agent.update(__MODULE__, fn {current_channel, channel_whitelist} ->
-      new_channel_whitelist = if is_nil(channels) do
-        Map.delete(channel_whitelist, name)
-      else
-        Map.put(channel_whitelist, name, channels)
-      end
-
-      {current_channel, new_channel_whitelist}
-    end)
+    set_property(name, :channel_whitelist, channels)
   end
 
   @spec get_channel(name :: term) :: [String.t()]
   def get_channel_whitelist(name) do
-    Agent.get(__MODULE__, fn {_, state} -> Map.get(state, name) end)
+    get_property(name, :channel_whitelist)
   end
 end
