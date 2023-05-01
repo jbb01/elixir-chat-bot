@@ -225,8 +225,8 @@ defmodule PizzaBot do
     |> String.replace("7", "𝟽")
     |> String.replace("8", "𝟾")
     |> String.replace("9", "𝟿")
-    |> String.replace(" ", "\u2002")
-    |> String.pad_leading(width, "\u2002")
+    |> String.replace(" ", "\u2007")
+    |> String.pad_leading(width, "\u2007")
   end
 
   defp tabular_numbers(num, width) do
