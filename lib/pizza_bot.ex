@@ -63,7 +63,12 @@ defmodule PizzaBot do
   end
 
   @impl true
-  def handle_command([@command, "check"], %Message{user_id: user_id}, state) when is_integer(user_id) do
+  def handle_command([@command, "check"], %Message{user_id: user_id} = message, state) when is_integer(user_id) do
+    handle_command([@command, "check", nil], message, state)
+  end
+
+  @impl true
+  def handle_command([@command, "check", total_with_tip], %Message{user_id: user_id}, state) when is_integer(user_id) do
     order = PizzaBot.State.get_current_order()
 
     if user_id == order.user_id do
@@ -74,18 +79,37 @@ defmodule PizzaBot do
       |> Enum.map(fn {_user, total, _payment} -> total end)
       |> Enum.sum()
 
+      {total_with_tip, tip_factor} = if is_nil(total_with_tip) do
+        {nil, nil}
+      else
+        {float, _} = Float.parse(total_with_tip)
+        {float, float / total}
+      end
+
+      currency = fn amount ->
+        "#{tabular_numbers(amount)} €"
+      end
+
       table = payments
       |> Enum.map(fn
-        {{_user_id, user_name}, total, payment} when (payment == 0) ->
-          "#{user_name}: #{tabular_numbers(total)} €"
-        {{_user_id, user_name}, total, payment} when (payment >= total) ->
-          strikethrough("#{user_name}: #{tabular_numbers(total)} €")
-        {{_user_id, user_name}, total, payment} ->
-          "#{user_name}: #{strikethrough(tabular_numbers(total) <> " €")} #{tabular_numbers(total - payment)} €"
+        {{_user_id, user_name}, user_total, payment} when (payment == 0) ->
+          if is_nil(tip_factor),
+             do: "#{user_name}: #{currency.(user_total)}",
+             else: "#{user_name}: #{currency.(user_total)} (#{currency.(user_total * tip_factor)})"
+        {{_user_id, user_name}, user_total, payment} when (payment >= user_total) ->
+          if is_nil(tip_factor),
+             do: strikethrough("#{user_name}: #{currency.(user_total)}"),
+             else: strikethrough("#{user_name}: #{currency.(user_total)} (#{currency.(user_total * tip_factor)})")
+        {{_user_id, user_name}, user_total, payment} ->
+          if is_nil(tip_factor),
+            do: "#{user_name}: #{strikethrough(currency.(user_total))} #{currency.(user_total - payment)}",
+            else: "#{user_name}: "
+              <> "#{strikethrough("#{currency.(user_total)} (#{currency.(user_total * tip_factor)})")} "
+              <> "#{currency.(user_total - payment)} (#{currency.((user_total - payment) * tip_factor)})"
       end)
 
-      ["Rechnung (ohne Trinkgeld)", "alle Angaben ohne Gewähr", "" | table]
-      ++ ["", "Gesamt: #{tabular_numbers(total)} €"]
+      ["Rechnung (#{if is_nil(tip_factor), do: "ohne", else: "mit"} Trinkgeld)", "alle Angaben ohne Gewähr", "" | table]
+      ++ ["", "Gesamt: #{currency.(total)}#{if is_nil(tip_factor), do: "", else: " (#{currency.(total_with_tip)})"}"]
       |> Enum.join("\n")
       |> do_post()
     end
@@ -329,8 +353,8 @@ defmodule PizzaBot do
     """
     Admin
 
-    #{@command} summary - Zeigt eine Übersicht der Bestellungen an
-    #{@command} check       - Zeigt die Rechnung an
+    #{@command} summary      - Zeigt eine Übersicht der Bestellungen an
+    #{@command} check [total] - Zeigt die Rechnung an
 
     #{@command} order confirm <order_id>     - Bestätigt den Zahlungseingang für eine Bestellung
     #{@command} order unconfirm <order_id> - Widerruft die Bestätigung eines Zahlungseingangs
