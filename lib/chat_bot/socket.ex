@@ -99,9 +99,9 @@ defmodule ChatBot.Socket do
     SocketState.update_delay(state, delay)
   end
 
-  defp handle_message(%{"type" => "ack"}, state) do
-    SocketState.reset_reconnect(state)
-  end
+  defp handle_message(%{"type" => "ack"}, state), do: SocketState.reset_reconnect(state)
+
+  defp handle_message(%{"type" => "pong"}, state), do: SocketState.reset_reconnect(state)
 
   defp handle_message(_message, state), do: state
 
