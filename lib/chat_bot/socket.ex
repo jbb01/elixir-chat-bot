@@ -120,6 +120,18 @@ defmodule ChatBot.Socket do
     }
   end
 
+  @doc """
+  Sends a given `message` under the given `name` to a given `channel`. Arguments can be provided either as a keyword list
+  or as a map.
+
+  ## Examples
+
+      iex> ChatBot.Socket.send_message(name: "Max Mustermann", channel: "test", message: "Hello World")
+      :ok
+
+  """
+  @spec send_message(name: String.t(), message: String.t(), channel: String.t()) :: :ok
+  @spec send_message(%{name: String.t(), message: String.t(), channel: String.t()}) :: :ok
   def send_message(opts) when is_list(opts) do
     send_message(opts |> Enum.into(%{}))
   end

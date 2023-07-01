@@ -1,4 +1,22 @@
 defmodule ChatBot.SocketManager do
+  @moduledoc """
+  Provides a GenServer-based API to manage chat sockets.
+
+  ## Examples
+
+      iex> GenServer.call(ChatBot.SocketManager, :list)
+      [{#PID<0.267.0>, "test"}, {#PID<0.272.0>, "elixir"}]
+
+      iex> GenServer.call(ChatBot.SocketManager, {:start, "foo"})
+      {:ok, #PID<0.292.0>}
+
+      iex> GenServer.call(ChatBot.SocketManager, {:stop, "foo"})
+      :ok
+
+      iex> GenServer.call(ChatBot.SocketManager, {:stop, "bar"})
+      {:error, :not_found}
+  """
+
   use GenServer
 
   def start_link(args) do
@@ -34,6 +52,7 @@ defmodule ChatBot.SocketManager do
   end
 
   @impl true
+  @spec handle_call(:list, from :: any, state :: nil) :: {:reply, [{pid :: pid, channel :: String.t()}], nil}
   def handle_call(:list, _from, state) do
     result = ChatBot.SocketSupervisor.list_sockets()
     {:reply, result, state}

@@ -17,6 +17,7 @@ defmodule ChatBot.BotSupervisor do
     start_bot(module, module)
   end
 
+  @spec start_bot(module :: module, name :: term) :: DynamicSupervisor.on_start_child()
   @spec start_bot(module :: module, name :: term, args :: term) :: DynamicSupervisor.on_start_child()
   def start_bot(module, name, args \\ nil) when is_atom(module) do
     DynamicSupervisor.start_child(__MODULE__, bot_spec(module, name, args))

@@ -1,4 +1,28 @@
 defmodule ChatBot.BotManager do
+  @moduledoc """
+  Provides a GenServer-based API to manage chat bots.
+
+  ## Examples
+
+      iex> GenServer.call(ChatBot.BotManager, {:start, PingBot})
+      {:ok, #PID<0.254.0>}
+
+      iex> GenServer.call(ChatBot.BotManager, {:start, PingBot})
+      {:error, {:already_started, #PID<0.254.0>}}
+
+      iex> GenServer.call(ChatBot.BotManager, {:start, PingBot, "OtherPingBot"})
+      {:ok, #PID<0.311.0>}
+
+      iex> GenServer.call(ChatBot.BotManager, {:restrict, "OtherPingBot", ["foo", "bar"]})
+      :ok
+
+      iex> GenServer.call(ChatBot.BotManager, :list)
+      [{#PID<0.254.0>, PingBot, PingBot, nil}, {#PID<0.311.0>, PingBot, "OtherPingBot", ["foo", "bar"]}]
+
+      iex> GenServer.call(ChatBot.BotManager, {:stop, "OtherPingBot"})
+      :ok
+  """
+
   use GenServer
 
   def start_link(args) do
