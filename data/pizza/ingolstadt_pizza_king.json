@@ -1,0 +1,26 @@
+{
+  "name": "Pizza King",
+  "city": "Ingolstadt",
+  "phone": "0841 9939111",
+  "pizzas": [
+    {"id": 35, "number": "35", "name": "Margherita", "ingredients": "Tomatensoße, Käse, Oregano", "price": 8.50},
+    {"id": 36, "number": "36", "name": "Funghi", "ingredients": "Margherita, frische Champignons", "price": 10.50},
+    {"id": 37, "number": "37", "name": "Salami", "ingredients": "Margherita, Salami", "price": 10.50},
+    {"id": 38, "number": "38", "name": "Prosciutto", "ingredients": "Margherita, Vorderschinken", "price": 10.50},
+    {"id": 39, "number": "39", "name": "Tonno", "ingredients": "Margherita, Thunfisch", "price": 10.90},
+    {"id": 40, "number": "40", "name": "Feta", "ingredients": "Margherita, Feta Käse, frische Tomaten", "price": 10.90},
+    {"id": 41, "number": "41", "name": "Funghi-Salami", "ingredients": "Margherita, frische Champignons, Salami", "price": 10.90},
+    {"id": 42, "number": "42", "name": "Hawaii", "ingredients": "Margherita, Vorderschinken, Ananas", "price": 10.90},
+    {"id": 43, "number": "43", "name": "Capricciosa", "ingredients": "Margherita, Vorderschinken, Thunfisch, Ei, Peperoni", "price": 13.50},
+    {"id": 44, "number": "44", "name": "Frutti di Mare", "ingredients": "Margherita, Meeresfrüchte, frischer Knoblauch", "price": 10.90},
+    {"id": 45, "number": "45", "name": "Sardellen", "ingredients": "Margherita, Sardellen, Kapern", "price": 10.90},
+    {"id": 52, "number": "52", "name": "Sucuk", "ingredients": "Margehrita, Paprika, rote Zwiebeln, Sucuk", "price": 12.90},
+    {"id": 47, "number": "47", "name": "Spezial", "ingredients": "Margherita, Hackfleisch, rote Zwiebeln, Paprika, Peperoni", "price": 10.90},
+    {"id": 48, "number": "48", "name": "Spinaci", "ingredients": "Margherita, frischer Spinat, Fetakäse", "price": 10.90},
+    {"id": 49, "number": "49", "name": "Devil", "ingredients": "Margherita, Salami, Vorderschinken, Peperoni, rote Zwiebeln, Paprika, Teufelsoße", "price": 13.50},
+    {"id": 50, "number": "50", "name": "Quattro Formaggio", "ingredients": "Margherita, Mozzarella, Gorgonzola, Feta Käse", "price": 13.50},
+    {"id": 51, "number": "51", "name": "Parma", "ingredients": "Margherita, Parmaschinken, Ruccola, frisch geriebener Parmesan", "price": 13.50},
+    {"id": 34, "number": "34", "name": "Vegan", "ingredients": "Vollkornteig, Tomatensauce, Veganer Käse, gegrilltes Gemüse", "price": 13.50},
+    {"id": 53, "number": "53", "name": "Calzone", "ingredients": "Salami, Oliven, Vorderschinken, Champignons", "price": 14.50}
+  ]
+}
