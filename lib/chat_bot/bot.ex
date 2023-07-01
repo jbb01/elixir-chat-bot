@@ -8,13 +8,36 @@ defmodule ChatBot.Bot do
 
     quote do
       use GenServer
+      require Logger
+
       @behaviour ChatBot.Bot
       @before_compile ChatBot.Bot
 
       @bot_name unquote(bot_name)
 
+      def init({:__init_bot__, name, init_arg}) do
+        Logger.metadata(bot_nick_name: unquote(bot_name))
+
+        name_str = fn
+          __MODULE__ -> ""
+          obj -> " as " <> inspect(obj)
+        end
+        message = &("Starting bot " <> inspect(__MODULE__) <> name_str.(&1) <> " with options " <> inspect(unquote(opts)))
+
+        case name do
+          {:via, Registry, {ChatBot.Bot.ViaName, via}} ->
+            Logger.metadata(bot_name: via)
+            Logger.info(message.(via))
+          _ ->
+            Logger.metadata(bot_name: name)
+            Logger.info(message.(name))
+        end
+
+        init(init_arg)
+      end
+
       def start_link(name, init_arg) do
-        GenServer.start_link(__MODULE__, init_arg, name: name)
+        GenServer.start_link(__MODULE__, {:__init_bot__, name, init_arg}, name: name)
       end
 
       @impl true
@@ -53,9 +76,11 @@ defmodule ChatBot.Bot do
   end
 
   @spec __before_compile__(any) :: Macro.t()
-  defmacro __before_compile__(_) do
+  defmacro __before_compile__(_env) do
     quote(generated: true) do
       def handle_message(_, state), do: state
+
+      def init(init_arg), do: {:ok, init_arg}
     end
   end
 end

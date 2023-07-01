@@ -18,6 +18,7 @@ defmodule ChatBot.SocketManager do
   """
 
   use GenServer
+  require Logger
 
   def start_link(args) do
     GenServer.start_link(__MODULE__, args, name: __MODULE__)
@@ -25,22 +26,27 @@ defmodule ChatBot.SocketManager do
 
   @impl true
   def init(channels: channels) do
-    channels |> Enum.each(&ChatBot.SocketSupervisor.start_socket/1)
-    {:ok, nil}
+    {:ok, nil, {:continue, channels}}
+  end
+
+  @impl true
+  def handle_continue(channels, state) do
+    channels |> Enum.each(&do_start/1)
+    {:noreply, state}
   end
 
   @impl true
   @spec handle_call({:start, channels :: [String.t()]}, from :: any, state :: nil) :: {:reply, [DynamicSupervisor.on_start_child()], nil}
   def handle_call({:start, channels}, _from, state) when is_list(channels) do
     result = channels
-    |> Enum.each(&ChatBot.SocketSupervisor.start_socket/1)
+    |> Enum.each(&do_start/1)
     {:reply, result, state}
   end
 
   @impl true
   @spec handle_call({:start, channel :: String.t()}, from :: any, state :: nil) :: {:reply, DynamicSupervisor.on_start_child(), nil}
   def handle_call({:start, channel}, _from, state) when is_binary(channel) do
-    result = ChatBot.SocketSupervisor.start_socket(channel)
+    result = do_start(channel)
     {:reply, result, state}
   end
 
@@ -56,5 +62,16 @@ defmodule ChatBot.SocketManager do
   def handle_call(:list, _from, state) do
     result = ChatBot.SocketSupervisor.list_sockets()
     {:reply, result, state}
+  end
+
+  @spec do_start(channel :: String.t()) :: DynamicSupervisor.on_start_child()
+  defp do_start(channel) do
+    case ChatBot.SocketSupervisor.start_socket(channel) do
+      {:error, cause} = result ->
+        Logger.error("Failed to start socket for channel " <> JSON.encode!(channel) <> ": " <> inspect(cause))
+        result
+      result ->
+        result
+    end
   end
 end

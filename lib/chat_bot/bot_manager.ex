@@ -31,6 +31,11 @@ defmodule ChatBot.BotManager do
 
   @impl true
   def init(bots: bots) do
+    {:ok, nil, {:continue, bots}}
+  end
+
+  @impl true
+  def handle_continue(bots, state) do
     bots
     |> Enum.each(fn bot ->
       case bot do
@@ -46,9 +51,8 @@ defmodule ChatBot.BotManager do
           ChatBot.BotState.set_channel_whitelist(name, channels)
       end
     end)
-    {:ok, nil}
+    {:noreply, state}
   end
-
 
   @impl true
   def handle_call({:start, module}, _from, state) when is_atom(module) do

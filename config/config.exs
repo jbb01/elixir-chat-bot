@@ -2,5 +2,5 @@ import Config
 
 config :logger, level: :debug
 config :logger, :console,
-       format: "[$level] [$metadata] $message \n",
-       metadata: [:error_code, :channel]
+       format: {LogFormat, :format},
+       metadata: [:error_code, :mfa, :channel, :bot_name]

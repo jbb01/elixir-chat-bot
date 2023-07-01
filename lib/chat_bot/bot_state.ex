@@ -18,7 +18,7 @@ defmodule ChatBot.BotState do
 
   @spec set_property(name :: String.t(), key :: atom, value :: term) :: :ok
   def set_property(name, key, value) when is_atom(key) do
-    Logger.debug("Setting property \"#{inspect(key)}\" to \"#{inspect(value)}\" for \"#{inspect(name)}\"")
+    Logger.debug(inspect(key) <> " = " <> inspect(value), bot_name: name)
     Agent.update(__MODULE__, fn
       %{^name => %{} = bot_properties} = properties when is_nil(value) ->
         %{properties | name => Map.delete(bot_properties, key)}

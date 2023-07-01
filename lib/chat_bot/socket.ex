@@ -86,8 +86,9 @@ defmodule ChatBot.Socket do
     Logger.error("Web socket terminated. (reason=#{inspect(close_reason)})")
   end
 
-  defp handle_message(%{"type" => "post", "message" => text, "delay" => delay} = message, state) do
-    Logger.info("Received Message - " <> text)
+  defp handle_message(%{"type" => "post", "message" => text, "name" => name, "delay" => delay} = message, state)
+       when is_binary(text) and is_binary(name) and is_integer(delay) do
+    Logger.info(JSON.encode!(name) <> ": " <> JSON.encode!(text))
 
     msg = parse_message(message)
 
