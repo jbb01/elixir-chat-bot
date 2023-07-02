@@ -1,5 +1,5 @@
 defmodule TicTacToeBot do
-  use ChatBot.Bot, name: "TicTacToe", no_bottag: true
+  use ChatBot.Bot, name: "TicTacToe", bottag: false
 
   @impl true
   def init(init_arg) do
@@ -7,7 +7,7 @@ defmodule TicTacToeBot do
   end
 
   @impl true
-  def handle_message(%ChatBot.Message{name: name, message: "!ttt start"}, state) do
+  def handle_message(%ChatBot.Message{name: _name, message: "!ttt start"}, state) do
     post("!ttt turn 0 0") # O
     post("!ttt turn 0 1") # X
     post("!ttt turn 0 2") # O

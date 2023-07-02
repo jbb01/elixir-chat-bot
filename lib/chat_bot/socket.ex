@@ -6,7 +6,12 @@ defmodule ChatBot.Socket do
 
   @url "wss://chat.qed-verein.de/websocket?position=0&version=2"
 
-  @type message :: %{name: String.t(), message: String.t()}
+  @type message :: %{
+    :name => String.t(),
+    :message => String.t(),
+    optional(:bottag) => integer | boolean,
+    optional(:public_id) => integer | boolean
+  }
 
   @spec start_link(channel: String.t()) :: {:ok, pid} | {:error, term}
   def start_link(channel: channel) do
@@ -35,10 +40,17 @@ defmodule ChatBot.Socket do
     {:ok, state}
   end
 
+
   @impl true
   @spec handle_cast({:send, {:message, message}}, SocketState.t()) :: {:reply, {:text, String.t()}, SocketState.t()}
   def handle_cast({:send, {:message, %{name: name, message: message} = opts}}, state) do
     bottag = case Map.get(opts, :bottag, 1) do
+      x when is_integer(x) -> x
+      true -> 1
+      false -> 0
+    end
+
+    public_id = case Map.get(opts, :public_id, 1) do
       x when is_integer(x) -> x
       true -> 1
       false -> 0
@@ -50,7 +62,8 @@ defmodule ChatBot.Socket do
       message: message,
       delay: state.delay + 1,
       bottag: bottag,
-      type: "post"
+      type: "post",
+      publicid: public_id
     )}
 
     {:reply, frame, state}

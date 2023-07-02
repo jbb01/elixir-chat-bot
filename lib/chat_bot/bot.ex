@@ -1,10 +1,13 @@
 defmodule ChatBot.Bot do
   @callback handle_message(message :: ChatBot.Message.t(), state :: term) :: {new_state :: term}
 
-  @spec __using__(name: String.t()) :: Macro.t()
+  @type option :: {:name, String.t()} | {:ignore_bots, boolean} | {:bottag, boolean} | {:public_id, boolean}
+
+  @spec __using__([option]) :: Macro.t()
   defmacro __using__([{:name, bot_name} | _ ] = opts) do
     ignore_bots = Keyword.get(opts, :ignore_bots, true)
-    no_bottag = Keyword.get(opts, :no_bottag, false)
+    bottag = Keyword.get(opts, :bottag, true)
+    public_id = Keyword.get(opts, :public_id, true)
 
     quote do
       use GenServer
@@ -62,9 +65,16 @@ defmodule ChatBot.Bot do
       @spec post(name :: String.t(), message :: String.t()) :: :ok
       def post(name \\ @bot_name, message, opts \\ []) do
         channel = ChatBot.BotState.get_channel(self())
-        bottag = unquote(if no_bottag, do: false, else: true)
+        bottag = unquote(bottag)
+        public_id = unquote(public_id)
 
-        ChatBot.Socket.send_message(Keyword.merge([channel: channel, name: name, message: message, bottag: bottag], opts))
+        ChatBot.Socket.send_message(Keyword.merge([
+          channel: channel,
+          name: name,
+          message: message,
+          bottag: bottag,
+          public_id: public_id
+        ], opts))
       end
 
       @spec get_name() :: String.t()
