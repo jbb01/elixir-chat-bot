@@ -13,6 +13,14 @@ defmodule ChatBot.Socket do
     optional(:public_id) => integer | boolean
   }
 
+  @type message_with_channel :: %{
+    :name => String.t(),
+    :message => String.t(),
+    :channel => String.t(),
+    optional(:bottag) => integer | boolean,
+    optional(:public_id) => integer | boolean
+  }
+
   @spec start_link(channel: String.t()) :: {:ok, pid} | {:error, term}
   def start_link(channel: channel) do
     {user_id, pwhash} = ChatBot.LoginHelper.login()
@@ -101,7 +109,7 @@ defmodule ChatBot.Socket do
 
   defp handle_message(%{"type" => "post", "message" => text, "name" => name, "delay" => delay} = message, state)
        when is_binary(text) and is_binary(name) and is_integer(delay) do
-    Logger.info(JSON.encode!(name) <> ": " <> JSON.encode!(text))
+    Logger.info(inspect(name) <> ": " <> inspect(text))
 
     msg = parse_message(message)
 
@@ -143,9 +151,12 @@ defmodule ChatBot.Socket do
       iex> ChatBot.Socket.send_message(name: "Max Mustermann", channel: "test", message: "Hello World")
       :ok
 
+      iex> ChatBot.Socket.send_message(%{name: "Max Mustermann", channel: "test", message: "Hello World"})
+      :ok
+
   """
   @spec send_message(name: String.t(), message: String.t(), channel: String.t()) :: :ok
-  @spec send_message(%{name: String.t(), message: String.t(), channel: String.t()}) :: :ok
+  @spec send_message(message :: message_with_channel) :: :ok
   def send_message(opts) when is_list(opts) do
     send_message(opts |> Enum.into(%{}))
   end
