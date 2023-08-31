@@ -87,17 +87,23 @@ defmodule ChatBot.Socket do
   @spec terminate(%{reason: WebSockex.close_reason() | WebSockex.close_error()}, SocketState.t()) :: term
   def handle_disconnect(%{reason: reason}, state) do
     Logger.warn("Web socket disconnected. (attempt=#{state.reconnect}, reason=#{inspect(reason)})")
-    if state.reconnect < 4 do
-      case state.reconnect do
-        0 -> Process.sleep(1_000)
-        1 -> Process.sleep(5_000)
-        2 -> Process.sleep(10_000)
-        3 -> Process.sleep(20_000)
-      end
 
+    case state.reconnect do
+      0 -> Process.sleep(1_000)
+      1 -> Process.sleep(5_000)
+      2 -> Process.sleep(10_000)
+      3 -> Process.sleep(20_000)
+      4 -> Process.sleep(60_000)
+      5 -> Process.sleep(300_000)
+      6 -> Process.sleep(600_000)
+      7 -> Process.sleep(1_800_000)
+      8 -> Process.sleep(3_600_000)
+    end
+
+    if state.reconnect < 8 do
       {:reconnect, SocketState.increment_reconnect(state)}
     else
-      {:ok, state}
+      {:reconnect, state}
     end
   end
 
