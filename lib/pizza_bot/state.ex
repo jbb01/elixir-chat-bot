@@ -78,14 +78,16 @@ defmodule PizzaBot.State do
 
   @spec add_order_item(order_id :: integer, item :: PizzaBot.OrderItem.t()) :: PizzaBot.OrderItem.t()
   def add_order_item(order_id, %PizzaBot.OrderItem{} = item) when is_integer(order_id) do
+    order = get_order_meta(order_id)
     items = get_order_items(order_id)
 
     highest_id = items
                  |> Enum.map(&(&1.id))
                  |> Enum.max(fn -> 0 end)
 
-    item_with_id = Map.put(item, :id, highest_id + 1)
-
+    item_with_id = item
+                   |> Map.put(:id, highest_id + 1)
+                   |> Map.put(:group, order.group)
 
     result = [item_with_id | items]
     |> save_order_items(order_id)
