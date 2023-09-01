@@ -1,7 +1,15 @@
 {
   "id": 1,
-  "group": "01.09.2023",
-  "deadline": "21:30 Uhr",
+  "current_group": "01.09.2023",
+  "groups": {
+    "31.08.2023": {
+      "deadline": "21:40 Uhr",
+      "total_with_tip": 90.0
+    },
+    "01.09.2023": {
+      "deadline": "21:30 Uhr"
+    }
+  },
   "user_id": 543,
   "restaurant": "ingolstadt"
 }

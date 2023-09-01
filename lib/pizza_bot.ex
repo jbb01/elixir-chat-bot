@@ -13,23 +13,29 @@ defmodule PizzaBot do
   @impl true
   def handle_command([@command, "info"], _message, state) do
     order = PizzaBot.State.get_current_order()
-    restaurant = PizzaBot.State.get_restaurant(order.restaurant)
+    group = PizzaBot.OrderMeta.get_current_group(order)
 
-    pizzas = restaurant.pizzas
-    |> Enum.map(fn pizza ->
-      id = tabular_numbers(pizza.id)
-      number = tabular_numbers(pizza.number)
-      price = tabular_numbers(pizza.price)
-      
-      "#{id} | #{number} | #{price} € | #{String.upcase(pizza.name)} #{pizza.ingredients}"
-    end)
+    if group == nil do
+      do_post("Aktuell läuft keine Pizzabestellung.")
+    else
+      restaurant = PizzaBot.State.get_restaurant(order.restaurant)
 
-    name = "Pizzabestellung bei " <> restaurant.name <> " in " <> restaurant.city
-    deadline = "Bestellannahmeschluss: " <> order.deadline
+      pizzas = restaurant.pizzas
+      |> Enum.map(fn pizza ->
+        id = tabular_numbers(pizza.id)
+        number = tabular_numbers(pizza.number)
+        price = tabular_numbers(pizza.price)
 
-    [name, deadline | pizzas]
-    |> Enum.join("\n")
-    |> do_post()
+        "#{id} | #{number} | #{price} € | #{String.upcase(pizza.name)} #{pizza.ingredients}"
+      end)
+
+      name = "Pizzabestellung bei " <> restaurant.name <> " in " <> restaurant.city
+      deadline = "Bestellannahmeschluss: " <> group.deadline
+
+      [name, deadline | pizzas]
+      |> Enum.join("\n")
+      |> do_post()
+    end
 
     state
   end
@@ -38,35 +44,39 @@ defmodule PizzaBot do
   # Admin Commands
   #
 
+  defp resolve_group(order, args, function) do
+    case args do
+      [] -> case order.current_group do
+        nil -> do_post("Aktuell läuft keine Pizzabestellung.")
+        current_group -> function.(order, current_group)
+      end
+      ["--all"] -> function.(order, nil)
+      [group] -> case PizzaBot.OrderMeta.get_group(order, group) do
+        nil -> do_post("Pizzabestellung " <> group <> " wurde nicht gefunden.")
+        _ -> function.(order, group)
+      end
+    end
+  end
+
+  # Summary
+
   @impl true
-  def handle_command([@command, "summary"], %Message{user_id: user_id}, state) when is_integer(user_id) do
+  def handle_command([@command, "summary" | args], %Message{user_id: user_id}, state) when is_integer(user_id) do
     order = PizzaBot.State.get_current_order()
 
     if user_id == order.user_id do
-      print_summary(order.id, false)
+      resolve_group(order, args, &print_summary/2)
     end
 
     state
   end
 
-  @impl true
-  def handle_command([@command, "summary", "--all"], %Message{user_id: user_id}, state) when is_integer(user_id) do
-    order = PizzaBot.State.get_current_order()
-
-    if user_id == order.user_id do
-      print_summary(order.id, true)
-    end
-
-    state
-  end
-
-  @spec print_summary(order_id :: integer, all :: boolean) :: any
-  defp print_summary(order_id, all) do
-    order = PizzaBot.State.get_order_meta(order_id)
+  @spec print_summary(order :: PizzaBot.OrderMeta.t(), current_group :: String.t() | nil) :: any
+  defp print_summary(%PizzaBot.OrderMeta{} = order, current_group) do
     restaurant = PizzaBot.State.get_restaurant(order.restaurant)
 
     items = PizzaBot.State.get_order_items(order.id)
-            |> Enum.filter(fn item -> all || item.group == order.group end)
+            |> Enum.filter(fn item -> is_nil(current_group) || item.group == current_group end)
             |> Enum.group_by(
                  fn order -> {order.pizza_id, order.notes} end,
                  fn order -> order.user_name end
@@ -76,113 +86,137 @@ defmodule PizzaBot do
       tabular_numbers(length(users)) <> "x " <> pizza.name <> " " <> notes <> " (" <> Enum.join(users, ", ") <> ")"
     end)
 
-    ["Übersicht" | items]
+    title = case current_group do
+      nil -> "Übersicht"
+      x -> "Übersicht (" <> x <> ")"
+    end
+
+    items = case items do
+      [] -> ["(keine Einträge)"]
+      x -> x
+    end
+
+    [title, "" | items]
     |> Enum.join("\n")
     |> do_post()
   end
 
+  # Check
 
   @impl true
-  def handle_command([@command, "check"], %Message{user_id: user_id} = message, state) when is_integer(user_id) do
+  def handle_command([@command, "check" | args], %Message{user_id: user_id} = message, state) when is_integer(user_id) do
     order = PizzaBot.State.get_current_order()
 
     if user_id == order.user_id do
-      print_check(order.id, false, nil)
+      resolve_group(order, args, &print_check/2)
     end
 
     state
   end
 
-  @impl true
-  def handle_command([@command, "check", "--all"], %Message{user_id: user_id} = message, state) when is_integer(user_id) do
-    order = PizzaBot.State.get_current_order()
+  @typep payments :: [{{user_id :: integer, user_name :: String.t()}, total :: number, tipped_total :: number, payed :: number, tipped_payed :: number, tipped? :: boolean}]
 
-    if user_id == order.user_id do
-      print_check(order.id, true, nil)
-    end
-
-    state
-  end
-
-  @impl true
-  def handle_command([@command, "check", total_with_tip], %Message{user_id: user_id}, state) when is_integer(user_id) do
-    order = PizzaBot.State.get_current_order()
-
-    if user_id == order.user_id do
-      print_check(order.id, false, total_with_tip)
-    end
-
-    state
-  end
-
-  @spec get_payments(order :: PizzaBot.OrderMeta.t(), all :: boolean)
-        :: [{{user_id :: integer, user_name :: String.t(), group :: String.t()}, total :: number, payed :: number}]
-  defp get_payments(order, all) do
+  @spec get_payments(order :: PizzaBot.OrderMeta.t(), current_group :: String.t() | nil) :: [payments]
+  defp get_payments(%PizzaBot.OrderMeta{} = order, current_group) do
     restaurant = PizzaBot.State.get_restaurant(order.restaurant)
 
-    PizzaBot.State.get_order_items(order.id)
-    |> Enum.filter(fn item -> all || item.group == order.group end)
+    items = PizzaBot.State.get_order_items(order.id)
+            |> Enum.filter(fn item -> is_nil(current_group) || item.group == current_group end)
+
+    # %{group :: String.t() => {total :: float, total_with_tip :: float | nil, tip_factor :: float | nil}}
+    total_per_group = items
     |> Enum.group_by(
-         fn order -> {order.user_id, order.user_name} end,
-         fn order ->
-           pizza = PizzaBot.Restaurant.get_pizza(restaurant , order.pizza_id)
-           {pizza.price, order.payed?}
+         fn item -> item.group end,
+         fn item -> PizzaBot.Restaurant.get_pizza(restaurant, item.pizza_id).price end
+       )
+    |> Enum.map(fn {group, items} ->
+      total = Enum.sum(items)
+      total_with_tip = PizzaBot.OrderMeta.get_group(order, group).total_with_tip
+
+      tip_factor = case total_with_tip do
+        nil -> nil
+        ^total -> nil
+        x when is_float(x) -> total_with_tip / total
+      end
+
+      {group, {total, total_with_tip, tip_factor}}
+    end)
+    |> Map.new
+
+    items
+    |> Enum.group_by(
+         fn item -> {item.user_id, item.user_name} end,
+         fn item ->
+           pizza = PizzaBot.Restaurant.get_pizza(restaurant, item.pizza_id)
+           {total, total_with_tip, tip_factor} = Map.get(total_per_group, item.group)
+
+           {pizza.price, item.payed?, (if is_nil(tip_factor), do: pizza.price, else: tip_factor * pizza.price), !is_nil(tip_factor)}
          end
        )
     |> Enum.map(fn {user, prices} ->
       {
         user,
-        prices |> Enum.map(fn {price, _payed?} -> price end) |> Enum.sum(),
-        prices |> Enum.filter(fn {_price, payed?} -> payed? end) |> Enum.map(fn {price, _payed?} -> price end) |> Enum.sum()
+        prices |> Enum.map(fn {price, _, _, _} -> price end) |> Enum.sum(),
+        prices |> Enum.map(fn {_, _, tipped_price, _} -> tipped_price end) |> Enum.sum(),
+        prices |> Enum.filter(fn {_, payed?, _, _} -> payed? end) |> Enum.map(fn {price, _, _, _} -> price end) |> Enum.sum(),
+        prices |> Enum.filter(fn {_, payed?, _, _} -> payed? end) |> Enum.map(fn {_, _, tipped_price, _} -> tipped_price end) |> Enum.sum(),
+        prices |> Enum.any?(fn {_, _, _, tipped?} -> tipped? end)
       }
     end)
   end
 
-  @spec print_check(order_id :: integer, all :: boolean, total_with_tip :: any) :: any
-  defp print_check(order_id, all, total_with_tip) do
-    order = PizzaBot.State.get_order_meta(order_id)
+  @spec print_check(order :: PizzaBot.OrderMeta.t()) :: any
+  defp print_check(%PizzaBot.OrderMeta{} = order) do
+    print_check(order, order.current_group)
+  end
 
-    # [{{user_id, user_name}, total, payed}, ...]
-    payments = get_payments(order, all)
-
-    total = payments
-            |> Enum.map(fn {_user, total, _payment} -> total end)
-            |> Enum.sum()
-
-    {total_with_tip, tip_factor} = if is_nil(total_with_tip) do
-      {nil, nil}
-    else
-      {float, _} = Float.parse(total_with_tip)
-      {float, float / total}
-    end
+  @spec print_check(order :: PizzaBot.OrderMeta.t(), current_group :: String.t() | nil) :: any
+  defp print_check(%PizzaBot.OrderMeta{} = order, current_group) do
+    payments = get_payments(order, current_group)
 
     currency = fn amount ->
       "#{tabular_numbers(amount)} €"
     end
 
-    table = payments
-            |> Enum.map(fn
-      {{_user_id, user_name}, user_total, payment} when (payment == 0) ->
-        if is_nil(tip_factor),
-           do: "#{user_name}: #{currency.(user_total)}",
-           else: "#{user_name}: #{currency.(user_total)} (#{currency.(user_total * tip_factor)})"
-      {{_user_id, user_name}, user_total, payment} when (payment >= user_total) ->
-        if is_nil(tip_factor),
-           do: strikethrough("#{user_name}: #{currency.(user_total)}"),
-           else: strikethrough("#{user_name}: #{currency.(user_total)} (#{currency.(user_total * tip_factor)})")
-      {{_user_id, user_name}, user_total, payment} ->
-        if is_nil(tip_factor),
-           do: "#{user_name}: #{strikethrough(currency.(user_total))} #{currency.(user_total - payment)}",
-           else: "#{user_name}: "
-           <> "#{strikethrough("#{currency.(user_total)} (#{currency.(user_total * tip_factor)})")} "
-                 <> "#{currency.(user_total - payment)} (#{currency.((user_total - payment) * tip_factor)})"
-    end)
+    format_tipped = fn
+      untipped, tipped, false -> currency.(untipped)
+      untipped, tipped, true -> "#{currency.(untipped)} (#{currency.(tipped)})"
+    end
 
-    ["Rechnung (#{if is_nil(tip_factor), do: "ohne", else: "mit"} Trinkgeld)", "alle Angaben ohne Gewähr", "" | table]
-    ++ ["", "Gesamt: #{currency.(total)}#{if is_nil(tip_factor), do: "", else: " (#{currency.(total_with_tip)})"}"]
+    format_payment = fn {{_user_id, user}, total, tipped_total, payment, tipped_payment, tipped?} -> cond do
+      payment == 0 ->
+        "#{user}: " <> format_tipped.(total, tipped_total, tipped?)
+      payment >= total ->
+        strikethrough("#{user}: " <> format_tipped.(total, tipped_total, tipped?))
+      true ->
+        "#{user}: " <> strikethrough(format_tipped.(total, tipped_total, tipped?)) <> " #{format_tipped.(total - payment, tipped_total - tipped_payment, tipped?)}"
+    end end
+
+    table = payments |> Enum.map(format_payment)
+
+    total = payments |> Enum.map(fn {_, total, _, _, _, _} -> total end) |> Enum.sum()
+    tipped_total = payments |> Enum.map(fn {_, _, tipped_total, _, _, _} -> tipped_total end) |> Enum.sum()
+    tipped? = payments |> Enum.any?(fn {_, _, _, _, _, tipped?} -> tipped? end)
+
+    title = case current_group do
+      nil -> "Rechnung"
+      x -> "Rechnung (" <> x <> ")"
+    end
+
+    title_suffix = if tipped?, do: "(mit Trinkgeld)", else: "(ohne Trinkgeld)"
+
+    table = case table do
+      [] -> ["(keine Einträge)"]
+      x -> x
+    end
+
+    [title <> " " <> title_suffix, "alle Angaben ohne Gewähr", "" | table]
+    ++ ["", "Gesamt: " <> format_tipped.(total, tipped_total, tipped?)]
     |> Enum.join("\n")
-    |> do_post()
+    |> do_post
   end
+
+  # Confirmation
 
   @impl true
   def handle_command([@command, "order", "confirm", item_id], %Message{user_id: user_id}, state) when is_integer(user_id) do
@@ -198,24 +232,6 @@ defmodule PizzaBot do
     confirm_payment(item_id, user_id, false, fn pizza, item ->
       do_post("Bestätigung des Zahlungseingang für \"#{pizza.name}\" (#{item.user_name}) wurde zurückgenommen.")
     end)
-
-    state
-  end
-
-  @impl true
-  def handle_command([@command, "order", "list", "--all"], %Message{user_id: user_id}, state) when is_integer(user_id) do
-    order = PizzaBot.State.get_current_order()
-
-    if user_id == order.user_id do
-      restaurant = PizzaBot.State.get_restaurant(order.restaurant)
-      PizzaBot.State.get_order_items(order.id)
-      |> Enum.map(fn item ->
-        pizza = PizzaBot.Restaurant.get_pizza(restaurant, item.pizza_id)
-        "#{item.id} | #{item.user_name} | #{item.group} | #{pizza.name} | #{item.notes}"
-      end)
-      |> Enum.join("\n")
-      |> do_post()
-    end
 
     state
   end
@@ -240,6 +256,26 @@ defmodule PizzaBot do
           success.(pizza, item)
       end
     end
+  end
+
+  # Order List All
+
+  @impl true
+  def handle_command([@command, "order", "list", "--all"], %Message{user_id: user_id}, state) when is_integer(user_id) do
+    order = PizzaBot.State.get_current_order()
+
+    if user_id == order.user_id do
+      restaurant = PizzaBot.State.get_restaurant(order.restaurant)
+      PizzaBot.State.get_order_items(order.id)
+      |> Enum.map(fn item ->
+        pizza = PizzaBot.Restaurant.get_pizza(restaurant, item.pizza_id)
+        "#{item.id} | #{item.user_name} | #{item.group} | #{pizza.name} | #{item.notes}"
+      end)
+      |> Enum.join("\n")
+      |> do_post()
+    end
+
+    state
   end
 
   #
@@ -282,7 +318,7 @@ defmodule PizzaBot do
         do_post("Die Bestellung mit ID #{item_id} existiert nicht.")
       item.user_id != user_id ->
         do_post("Die Bestellung mit ID #{item_id} ist nicht deine.")
-      item.group != order.group ->
+      item.group != order.current_group ->
         do_post("Die Bestellung mit ID #{item_id} kann nicht mehr storniert werden.")
       true ->
         pizza = PizzaBot.State.get_restaurant(order.restaurant)
@@ -302,16 +338,19 @@ defmodule PizzaBot do
     pizza = PizzaBot.State.get_restaurant(order.restaurant)
             |> PizzaBot.Restaurant.get_pizza(pizza_id)
 
-    if is_nil(pizza) do
-      do_post("Es gibt keine Pizza mit der ID " <> to_string(pizza_id))
-    else
-      note = Enum.join(notes, " ")
-      |> String.replace(["\n", "\r"], " ")
+    cond do
+      is_nil(pizza) ->
+        do_post("Es gibt keine Pizza mit der ID " <> to_string(pizza_id))
+      is_nil(order.current_group) ->
+        do_post("Aktuell läuft keine Pizzabestellung.")
+      true ->
+        note = Enum.join(notes, " ")
+               |> String.replace(["\n", "\r"], " ")
 
-      item = %PizzaBot.OrderItem{user_id: user_id, user_name: user_name, pizza_id: pizza_id, notes: note, payed?: false}
-      item_with_id = PizzaBot.State.add_order_item(order.id, item)
+        item = %PizzaBot.OrderItem{user_id: user_id, user_name: user_name, pizza_id: pizza_id, notes: note, payed?: false}
+        item_with_id = PizzaBot.State.add_order_item(order.id, item)
 
-      do_post("Pizza \"#{pizza.name}\" wurde zur Bestellung hinzugefügt (Order-ID #{item_with_id.id}).")
+        do_post("Pizza \"#{pizza.name}\" wurde zur Bestellung hinzugefügt (Order-ID #{item_with_id.id}).")
     end
 
     state
@@ -406,8 +445,8 @@ defmodule PizzaBot do
     """
     Admin
 
-    #{@command} summary [--all] - Zeigt eine Übersicht der Bestellungen an
-    #{@command} check [total | --all] - Zeigt die Rechnung an
+    #{@command} summary [--all | group] - Zeigt eine Übersicht der Bestellungen an
+    #{@command} check [--all | group] - Zeigt die Rechnung an
 
     #{@command} order confirm <order_id>     - Bestätigt den Zahlungseingang für eine Bestellung
     #{@command} order unconfirm <order_id> - Widerruft die Bestätigung eines Zahlungseingangs

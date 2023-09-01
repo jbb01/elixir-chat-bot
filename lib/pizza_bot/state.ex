@@ -87,7 +87,7 @@ defmodule PizzaBot.State do
 
     item_with_id = item
                    |> Map.put(:id, highest_id + 1)
-                   |> Map.put(:group, order.group)
+                   |> Map.put(:group, order.current_group)
 
     result = [item_with_id | items]
     |> save_order_items(order_id)
